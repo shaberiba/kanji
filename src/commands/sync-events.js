@@ -5,7 +5,7 @@ import { logger } from '../logger.js';
 
 export const data = new SlashCommandBuilder()
   .setName('sync-events')
-  .setDescription('Manually check the Facebook Page for new events and post them (admin only)');
+  .setDescription('Manually sync Facebook Page events into Discord and send any due reminders (admin only)');
 
 export async function execute(interaction) {
   if (!isOwnerOrAdmin(interaction)) {
@@ -20,13 +20,15 @@ export async function execute(interaction) {
 
   try {
     const result = await syncEvents(interaction.client);
+    const lines = [
+      `Checked ${result.checked} event(s) on the Page, synced ${result.newlySynced} new one(s) into Discord's Events.`,
+    ];
     if (result.skipped === 'no_channel') {
-      await interaction.editReply('No events channel configured yet - run /events-channel set first.');
-      return;
+      lines.push("No events channel configured, so no reminders were sent - run /events-channel set first.");
+    } else {
+      lines.push(`Sent ${result.remindersSent} reminder(s).`);
     }
-    await interaction.editReply(
-      `Checked ${result.checked} event(s) on the Page, posted ${result.posted} new one(s).`
-    );
+    await interaction.editReply(lines.join('\n'));
   } catch (error) {
     logger.error({ err: error }, 'Manual event sync failed');
     await interaction.editReply(

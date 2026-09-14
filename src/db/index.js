@@ -35,9 +35,13 @@ db.exec(`
     updated_at TEXT NOT NULL
   );
 
-  CREATE TABLE IF NOT EXISTS posted_events (
+  CREATE TABLE IF NOT EXISTS synced_events (
     facebook_event_id TEXT PRIMARY KEY,
-    discord_message_id TEXT,
-    posted_at TEXT NOT NULL
+    discord_scheduled_event_id TEXT,
+    name TEXT NOT NULL,
+    start_time TEXT NOT NULL,
+    reminder_48h_sent_at TEXT,
+    reminder_24h_sent_at TEXT,
+    synced_at TEXT NOT NULL
   );
 `);

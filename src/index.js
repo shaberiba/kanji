@@ -14,8 +14,8 @@ client.once('ready', () => {
   setInterval(() => {
     syncEvents(client)
       .then((result) => {
-        if (result.posted > 0) {
-          logger.info(result, 'Synced new Facebook events to Discord');
+        if (result.newlySynced > 0 || result.remindersSent > 0) {
+          logger.info(result, 'Facebook event sync: synced events / sent reminders');
         }
       })
       .catch((error) => logger.error({ err: error }, 'Scheduled event sync failed'));

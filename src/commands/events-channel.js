@@ -4,20 +4,20 @@ import { getConfigValue, setConfigValue, EVENTS_CHANNEL_ID_KEY } from '../db/con
 
 export const data = new SlashCommandBuilder()
   .setName('events-channel')
-  .setDescription('Configure which channel Facebook Page events get posted to (admin only)')
+  .setDescription('Configure which channel gets 48h/24h event reminders (admin only)')
   .addSubcommand((sub) =>
     sub
       .setName('set')
-      .setDescription('Set the events announcement channel')
+      .setDescription('Set the reminder channel')
       .addChannelOption((opt) =>
         opt
           .setName('channel')
-          .setDescription('Channel to post new Facebook events to')
+          .setDescription('Channel to post event reminders to')
           .addChannelTypes(ChannelType.GuildText)
           .setRequired(true)
       )
   )
-  .addSubcommand((sub) => sub.setName('show').setDescription('Show the current events announcement channel'));
+  .addSubcommand((sub) => sub.setName('show').setDescription('Show the current reminder channel'));
 
 export async function execute(interaction) {
   const subcommand = interaction.options.getSubcommand();
@@ -25,7 +25,7 @@ export async function execute(interaction) {
   if (subcommand === 'show') {
     const channelId = getConfigValue(EVENTS_CHANNEL_ID_KEY);
     await interaction.reply({
-      content: channelId ? `Events are posted to <#${channelId}>.` : 'No events channel is configured yet.',
+      content: channelId ? `Event reminders are posted to <#${channelId}>.` : 'No reminder channel is configured yet.',
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -42,7 +42,7 @@ export async function execute(interaction) {
   const channel = interaction.options.getChannel('channel', true);
   setConfigValue(EVENTS_CHANNEL_ID_KEY, channel.id);
   await interaction.reply({
-    content: `New Facebook events will be posted to <#${channel.id}>.`,
+    content: `Event reminders (48h/24h before) will now be posted to <#${channel.id}>.`,
     flags: MessageFlags.Ephemeral,
   });
 }
