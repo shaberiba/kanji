@@ -1,11 +1,25 @@
 # kanji
 
 Discord bot (幹事 - "the person who organizes the group's events") that
-connects a Discord server to a Facebook Page: it mirrors the Page's events
-into Discord's native Events feature, sends 48h/24h reminders in a channel
-as each one approaches, and lets authorized users publish posts to the
-Page. Phase 1: owner/admin only. Phase 2: any user holding a Discord role
-added via `/event-role`.
+connects one Facebook Page to any number of Discord servers: it mirrors
+the Page's events into each server's native Events feature, sends 48h/24h
+reminders in a channel as each one approaches, and lets authorized users
+publish posts to the Page. Phase 1: owner/admin only. Phase 2: any user
+holding a Discord role added via `/event-role`.
+
+## Multi-server support
+
+The bot is a single process/single Facebook Page, but can be invited into
+as many Discord servers as you want - each server tracks its own reminder
+channel and its own sync/reminder history independently (one server's
+config never affects another's). To add a second server:
+1. Invite the bot there too (same OAuth2 URL, permissions below)
+2. Run `/events-channel set #channel` in that server
+3. Run `/sync-events` (or just wait for the next automatic poll)
+
+For a genuinely multi-server bot, leave `DISCORD_GUILD_ID` blank in `.env`
+so commands register globally (works in every server the bot joins) rather
+than being scoped to one guild - see the comment in `.env.example`.
 
 ## Feasibility note
 
@@ -87,6 +101,6 @@ homelab repo's `nexus/containers/` directory (deploys from
 `github.com/shaberiba/kanji`).
 
 The SQLite file at `./data/bot.sqlite3` must persist across
-restarts/redeploys — it holds the Facebook token, the role allowlist, the
-reminder-channel config, and which Facebook events have already been
-synced/reminded about.
+restarts/redeploys — it holds the Facebook token, each server's role
+allowlist and reminder-channel config, and which Facebook events have
+already been synced/reminded about in each server.

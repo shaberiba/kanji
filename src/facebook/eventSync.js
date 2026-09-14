@@ -1,14 +1,8 @@
 import { EmbedBuilder, GuildScheduledEventEntityType, GuildScheduledEventPrivacyLevel } from 'discord.js';
 import { DateTime } from 'luxon';
-import { config } from '../config.js';
 import { listPageEvents } from './client.js';
-import {
-  getSyncedEvent,
-  recordSyncedEvent,
-  markReminderSent,
-  listUpcomingSyncedEvents,
-} from '../db/eventSyncStore.js';
-import { getConfigValue, EVENTS_CHANNEL_ID_KEY } from '../db/configStore.js';
+import { getGuildEventSync, recordGuildEventSync, markGuildEventReminderSent } from '../db/guildEventSyncStore.js';
+import { getEventsChannel } from '../db/guildConfigStore.js';
 import { logger } from '../logger.js';
 
 const DEFAULT_EVENT_DURATION_HOURS = 3;
@@ -16,14 +10,6 @@ const REMINDER_WINDOWS = [
   { key: '48h', hoursBefore: 48 },
   { key: '24h', hoursBefore: 24 },
 ];
-
-function resolveGuild(discordClient) {
-  if (config.discord.guildId) {
-    const guild = discordClient.guilds.cache.get(config.discord.guildId);
-    if (guild) return guild;
-  }
-  return discordClient.guilds.cache.first() ?? null;
-}
 
 /**
  * Discord auto-links bare URLs inside a Scheduled Event's description, so
@@ -64,11 +50,10 @@ export async function buildEventImage(fbEvent) {
 }
 
 /**
- * Creates a Discord native Scheduled Event mirroring a Facebook event.
- * Silent by design - this is what makes it show up in Discord's Events tab
- * without spamming the channel. Returns the created event's id, or null if
- * the Facebook event's start time has already passed (Discord rejects
- * scheduled events with a start time in the past).
+ * Creates a Discord native Scheduled Event mirroring a Facebook event in one
+ * specific guild. Silent by design - no channel message. Returns the created
+ * event's id, or null if the Facebook event's start time has already passed
+ * (Discord rejects scheduled events with a start time in the past).
  */
 async function createDiscordScheduledEvent(guild, fbEvent, startTime) {
   if (startTime <= DateTime.now()) return null;
@@ -91,91 +76,84 @@ async function createDiscordScheduledEvent(guild, fbEvent, startTime) {
   return created.id;
 }
 
-/**
- * Pulls events from the Facebook Page and mirrors any not yet seen as
- * Discord native Scheduled Events (no channel message). Safe to call
- * repeatedly - already-synced events are skipped via the synced_events table.
- */
-async function syncNewEvents(discordClient) {
-  const events = await listPageEvents();
-  const guild = resolveGuild(discordClient);
-  let newlySynced = 0;
-
-  for (const event of events) {
-    if (getSyncedEvent(event.id)) continue;
-    if (!event.start_time) continue;
-
-    const startTime = DateTime.fromISO(event.start_time);
-    if (!startTime.isValid) continue;
-
-    let discordScheduledEventId = null;
-    if (guild) {
-      try {
-        discordScheduledEventId = await createDiscordScheduledEvent(guild, event, startTime);
-      } catch (error) {
-        logger.warn({ err: error, facebookEventId: event.id }, 'Failed to create Discord scheduled event');
-      }
-    }
-
-    recordSyncedEvent({
-      facebookEventId: event.id,
-      discordScheduledEventId,
-      name: event.name || 'Untitled event',
-      startTime: startTime.toISO(),
-    });
-    newlySynced += 1;
-  }
-
-  return { checked: events.length, newlySynced };
-}
-
-function buildReminderEmbed(row, hoursBefore) {
-  const start = DateTime.fromISO(row.start_time);
+function buildReminderEmbed(fbEvent, startTime, hoursBefore) {
   return new EmbedBuilder()
-    .setTitle(`Reminder: ${row.name}`)
-    .setURL(`https://www.facebook.com/events/${row.facebook_event_id}`)
+    .setTitle(`Reminder: ${fbEvent.name || 'Untitled event'}`)
+    .setURL(`https://www.facebook.com/events/${fbEvent.id}`)
     .setColor(0x3d2f7a)
-    .setDescription(`Starts <t:${Math.floor(start.toSeconds())}:R> (<t:${Math.floor(start.toSeconds())}:F>)`)
+    .setDescription(`Starts <t:${Math.floor(startTime.toSeconds())}:R> (<t:${Math.floor(startTime.toSeconds())}:F>)`)
     .setFooter({ text: `${hoursBefore}-hour reminder` });
 }
 
 /**
- * Sends a channel reminder for any synced event crossing the 48h or 24h
- * mark before its start time, at most once per window per event.
+ * Handles one Facebook event for one guild: mirrors it into that guild's
+ * Scheduled Events if not already done, then sends any due 48h/24h
+ * reminder to that guild's configured channel (if it has one).
+ * Independent per guild - one guild's config/history never affects another.
  */
-async function sendDueReminders(discordClient) {
-  const channelId = getConfigValue(EVENTS_CHANNEL_ID_KEY);
-  if (!channelId) return { remindersSent: 0, skipped: 'no_channel' };
+async function syncEventForGuild(discordClient, guild, fbEvent, startTime, isPast) {
+  let result = { synced: false, remindersSent: 0 };
+  let row = getGuildEventSync(fbEvent.id, guild.id);
 
-  const now = DateTime.now();
-  let remindersSent = 0;
-
-  for (const row of listUpcomingSyncedEvents()) {
-    const start = DateTime.fromISO(row.start_time);
-    const hoursUntilStart = start.diff(now, 'hours').hours;
-
-    for (const window of REMINDER_WINDOWS) {
-      const alreadySent = window.key === '48h' ? row.reminder_48h_sent_at : row.reminder_24h_sent_at;
-      if (alreadySent) continue;
-      if (hoursUntilStart > window.hoursBefore) continue;
-
-      const channel = await discordClient.channels.fetch(channelId);
-      await channel.send({ embeds: [buildReminderEmbed(row, window.hoursBefore)] });
-      markReminderSent(row.facebook_event_id, window.key);
-      remindersSent += 1;
+  if (!row) {
+    let discordScheduledEventId = null;
+    if (!isPast) {
+      try {
+        discordScheduledEventId = await createDiscordScheduledEvent(guild, fbEvent, startTime);
+      } catch (error) {
+        logger.warn({ err: error, facebookEventId: fbEvent.id, guildId: guild.id }, 'Failed to create Discord scheduled event');
+      }
     }
+    recordGuildEventSync({ facebookEventId: fbEvent.id, guildId: guild.id, discordScheduledEventId });
+    row = { reminder_48h_sent_at: null, reminder_24h_sent_at: null };
+    result.synced = true;
   }
 
-  return { remindersSent };
+  if (isPast) return result;
+
+  const channelId = getEventsChannel(guild.id);
+  if (!channelId) return result;
+
+  const hoursUntilStart = startTime.diff(DateTime.now(), 'hours').hours;
+  for (const window of REMINDER_WINDOWS) {
+    const alreadySent = window.key === '48h' ? row.reminder_48h_sent_at : row.reminder_24h_sent_at;
+    if (alreadySent || hoursUntilStart > window.hoursBefore) continue;
+
+    const channel = await discordClient.channels.fetch(channelId);
+    await channel.send({ embeds: [buildReminderEmbed(fbEvent, startTime, window.hoursBefore)] });
+    markGuildEventReminderSent(fbEvent.id, guild.id, window.key);
+    result.remindersSent += 1;
+  }
+
+  return result;
 }
 
 /**
- * Full sync pass: mirrors new Facebook events into Discord's native
- * Scheduled Events (silently), then sends any due 48h/24h reminders to the
- * configured channel. Called on a timer and via /sync-events.
+ * Full sync pass, run once per Facebook Page fetch and applied
+ * independently to every guild the bot is currently a member of - the same
+ * Page can be mirrored into any number of servers, each with its own
+ * reminder channel and its own sync/reminder history. Called on a timer
+ * and via /sync-events.
  */
 export async function syncEvents(discordClient) {
-  const { checked, newlySynced } = await syncNewEvents(discordClient);
-  const { remindersSent, skipped } = await sendDueReminders(discordClient);
-  return { checked, newlySynced, remindersSent, skipped };
+  const events = await listPageEvents();
+  const guilds = [...discordClient.guilds.cache.values()];
+
+  let newlySynced = 0;
+  let remindersSent = 0;
+
+  for (const event of events) {
+    if (!event.start_time) continue;
+    const startTime = DateTime.fromISO(event.start_time);
+    if (!startTime.isValid) continue;
+    const isPast = startTime <= DateTime.now();
+
+    for (const guild of guilds) {
+      const result = await syncEventForGuild(discordClient, guild, event, startTime, isPast);
+      if (result.synced) newlySynced += 1;
+      remindersSent += result.remindersSent;
+    }
+  }
+
+  return { checked: events.length, guildsChecked: guilds.length, newlySynced, remindersSent };
 }

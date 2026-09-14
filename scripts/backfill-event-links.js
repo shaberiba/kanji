@@ -3,7 +3,8 @@
 // added after they were first created - the "Facebook event: <link>" line
 // in the description, and the Facebook cover photo as the event's image.
 // New syncs get both automatically via buildEventDescription()/
-// buildEventImage() in src/facebook/eventSync.js. Safe to re-run.
+// buildEventImage() in src/facebook/eventSync.js. Safe to re-run. Covers
+// every guild the event was synced into, not just one.
 
 import { config } from '../src/config.js';
 import { db } from '../src/db/index.js';
@@ -11,7 +12,7 @@ import { listPageEvents } from '../src/facebook/client.js';
 import { buildEventDescription, buildEventImage } from '../src/facebook/eventSync.js';
 
 async function main() {
-  const rows = db.prepare('SELECT * FROM synced_events WHERE discord_scheduled_event_id IS NOT NULL').all();
+  const rows = db.prepare('SELECT * FROM guild_event_sync WHERE discord_scheduled_event_id IS NOT NULL').all();
   if (rows.length === 0) {
     console.log('No synced events with a Discord scheduled event to backfill.');
     return;
@@ -22,15 +23,16 @@ async function main() {
 
   for (const row of rows) {
     const fbEvent = fbEventsById.get(row.facebook_event_id);
+    const label = `${fbEvent?.name || row.facebook_event_id} (guild ${row.guild_id})`;
     if (!fbEvent) {
-      console.log(`Skipping ${row.name} (${row.facebook_event_id}) - no longer found on Facebook`);
+      console.log(`Skipping ${label} - no longer found on Facebook`);
       continue;
     }
 
     const description = buildEventDescription(fbEvent);
     const image = await buildEventImage(fbEvent);
     const res = await fetch(
-      `https://discord.com/api/v10/guilds/${config.discord.guildId}/scheduled-events/${row.discord_scheduled_event_id}`,
+      `https://discord.com/api/v10/guilds/${row.guild_id}/scheduled-events/${row.discord_scheduled_event_id}`,
       {
         method: 'PATCH',
         headers: {
@@ -42,10 +44,10 @@ async function main() {
     );
 
     if (res.ok) {
-      console.log(`Updated: ${row.name} (${row.facebook_event_id})${image ? ' [with image]' : ' [no cover photo]'}`);
+      console.log(`Updated: ${label}${image ? ' [with image]' : ' [no cover photo]'}`);
     } else {
       const body = await res.json().catch(() => ({}));
-      console.log(`Failed: ${row.name} (${row.facebook_event_id}) - ${res.status} ${JSON.stringify(body)}`);
+      console.log(`Failed: ${label} - ${res.status} ${JSON.stringify(body)}`);
     }
   }
 }

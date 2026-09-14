@@ -29,19 +29,25 @@ db.exec(`
     UNIQUE(guild_id, role_id)
   );
 
-  CREATE TABLE IF NOT EXISTS bot_config (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL,
+  -- Per-guild settings. A guild only participates in event sync/reminders
+  -- once it has an events_channel_id set (via /events-channel set) -
+  -- multiple guilds can each configure their own independently.
+  CREATE TABLE IF NOT EXISTS guild_config (
+    guild_id TEXT PRIMARY KEY,
+    events_channel_id TEXT,
     updated_at TEXT NOT NULL
   );
 
-  CREATE TABLE IF NOT EXISTS synced_events (
-    facebook_event_id TEXT PRIMARY KEY,
+  -- One Facebook event can be mirrored into multiple guilds' native
+  -- Scheduled Events (one Discord event id per guild) with independent
+  -- reminder tracking per guild.
+  CREATE TABLE IF NOT EXISTS guild_event_sync (
+    facebook_event_id TEXT NOT NULL,
+    guild_id TEXT NOT NULL,
     discord_scheduled_event_id TEXT,
-    name TEXT NOT NULL,
-    start_time TEXT NOT NULL,
     reminder_48h_sent_at TEXT,
     reminder_24h_sent_at TEXT,
-    synced_at TEXT NOT NULL
+    synced_at TEXT NOT NULL,
+    PRIMARY KEY (facebook_event_id, guild_id)
   );
 `);

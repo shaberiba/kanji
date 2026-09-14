@@ -20,15 +20,11 @@ export async function execute(interaction) {
 
   try {
     const result = await syncEvents(interaction.client);
-    const lines = [
-      `Checked ${result.checked} event(s) on the Page, synced ${result.newlySynced} new one(s) into Discord's Events.`,
-    ];
-    if (result.skipped === 'no_channel') {
-      lines.push("No events channel configured, so no reminders were sent - run /events-channel set first.");
-    } else {
-      lines.push(`Sent ${result.remindersSent} reminder(s).`);
-    }
-    await interaction.editReply(lines.join('\n'));
+    await interaction.editReply(
+      `Checked ${result.checked} event(s) on the Page across ${result.guildsChecked} server(s), ` +
+        `synced ${result.newlySynced} new event/server pair(s), sent ${result.remindersSent} reminder(s).\n` +
+        "(A server only gets reminders once an admin runs /events-channel set there.)"
+    );
   } catch (error) {
     logger.error({ err: error }, 'Manual event sync failed');
     await interaction.editReply(
