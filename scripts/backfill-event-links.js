@@ -1,13 +1,14 @@
 #!/usr/bin/env node
-// One-off: adds a "Facebook event: <link>" line to the description of
-// Discord Scheduled Events that were already synced before descriptions
-// started including the link. New syncs get this automatically via
-// buildEventDescription() in src/facebook/eventSync.js - safe to re-run.
+// One-off: patches already-synced Discord Scheduled Events with metadata
+// added after they were first created - the "Facebook event: <link>" line
+// in the description, and the Facebook cover photo as the event's image.
+// New syncs get both automatically via buildEventDescription()/
+// buildEventImage() in src/facebook/eventSync.js. Safe to re-run.
 
 import { config } from '../src/config.js';
 import { db } from '../src/db/index.js';
 import { listPageEvents } from '../src/facebook/client.js';
-import { buildEventDescription } from '../src/facebook/eventSync.js';
+import { buildEventDescription, buildEventImage } from '../src/facebook/eventSync.js';
 
 async function main() {
   const rows = db.prepare('SELECT * FROM synced_events WHERE discord_scheduled_event_id IS NOT NULL').all();
@@ -27,6 +28,7 @@ async function main() {
     }
 
     const description = buildEventDescription(fbEvent);
+    const image = await buildEventImage(fbEvent);
     const res = await fetch(
       `https://discord.com/api/v10/guilds/${config.discord.guildId}/scheduled-events/${row.discord_scheduled_event_id}`,
       {
@@ -35,12 +37,12 @@ async function main() {
           Authorization: `Bot ${config.discord.botToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ description }),
+        body: JSON.stringify(image ? { description, image } : { description }),
       }
     );
 
     if (res.ok) {
-      console.log(`Updated: ${row.name} (${row.facebook_event_id})`);
+      console.log(`Updated: ${row.name} (${row.facebook_event_id})${image ? ' [with image]' : ' [no cover photo]'}`);
     } else {
       const body = await res.json().catch(() => ({}));
       console.log(`Failed: ${row.name} (${row.facebook_event_id}) - ${res.status} ${JSON.stringify(body)}`);

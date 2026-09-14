@@ -21,7 +21,10 @@ Because of this, the bot's real capabilities are:
 - **Reading** events already on the Page (created manually via Facebook's
   web UI) and mirroring each one into Discord's own native Scheduled
   Events (the server's "Events" tab) - silent, no channel message, so
-  existing/backlog events don't spam a channel when first synced.
+  existing/backlog events don't spam a channel when first synced. Each
+  mirrored event's description includes a link back to the Facebook event,
+  and its cover photo (if the Facebook event has one) is set as the
+  Discord event's image.
 - **Reminders**: 48 hours and 24 hours before each synced event's start
   time, the bot posts a reminder to a configured channel (once per window,
   per event - tracked in SQLite so it never double-sends).

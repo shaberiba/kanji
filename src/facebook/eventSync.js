@@ -26,13 +26,6 @@ function resolveGuild(discordClient) {
 }
 
 /**
- * Creates a Discord native Scheduled Event mirroring a Facebook event.
- * Silent by design - this is what makes it show up in Discord's Events tab
- * without spamming the channel. Returns the created event's id, or null if
- * the Facebook event's start time has already passed (Discord rejects
- * scheduled events with a start time in the past).
- */
-/**
  * Discord auto-links bare URLs inside a Scheduled Event's description, so
  * this is how we surface a "view on Facebook" link on the Discord side.
  */
@@ -43,6 +36,40 @@ export function buildEventDescription(fbEvent) {
   return combined.slice(0, 1000);
 }
 
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // Discord's cover image upload limit
+
+/**
+ * Downloads a Facebook event's cover photo and returns it as a base64 data
+ * URI, the format discord.js expects for setting a Scheduled Event's image.
+ * Returns undefined (rather than throwing) on any failure - a missing cover
+ * image should never block the rest of the sync.
+ */
+export async function buildEventImage(fbEvent) {
+  const sourceUrl = fbEvent.cover?.source;
+  if (!sourceUrl) return undefined;
+
+  try {
+    const response = await fetch(sourceUrl);
+    if (!response.ok) throw new Error(`Fetching cover image failed: HTTP ${response.status}`);
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.byteLength > MAX_IMAGE_BYTES) throw new Error(`Cover image too large (${buffer.byteLength} bytes)`);
+
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    return `data:${contentType};base64,${buffer.toString('base64')}`;
+  } catch (error) {
+    logger.warn({ err: error, facebookEventId: fbEvent.id }, 'Failed to fetch Facebook cover image for Discord event');
+    return undefined;
+  }
+}
+
+/**
+ * Creates a Discord native Scheduled Event mirroring a Facebook event.
+ * Silent by design - this is what makes it show up in Discord's Events tab
+ * without spamming the channel. Returns the created event's id, or null if
+ * the Facebook event's start time has already passed (Discord rejects
+ * scheduled events with a start time in the past).
+ */
 async function createDiscordScheduledEvent(guild, fbEvent, startTime) {
   if (startTime <= DateTime.now()) return null;
 
@@ -58,6 +85,7 @@ async function createDiscordScheduledEvent(guild, fbEvent, startTime) {
     entityType: GuildScheduledEventEntityType.External,
     description: buildEventDescription(fbEvent),
     entityMetadata: { location: (fbEvent.place?.name || 'See Facebook event for details').slice(0, 100) },
+    image: await buildEventImage(fbEvent),
   });
 
   return created.id;

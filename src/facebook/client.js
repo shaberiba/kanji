@@ -117,7 +117,7 @@ export async function listPageEvents() {
 
   const body = await graphRequest(config.facebook.graphApiVersion, `/${config.facebook.pageId}/events`, {
     params: {
-      fields: 'id,name,description,start_time,end_time,place',
+      fields: 'id,name,description,start_time,end_time,place,cover',
       access_token: record.page_access_token,
     },
   });
