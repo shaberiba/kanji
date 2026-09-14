@@ -24,7 +24,7 @@ async function main() {
   console.log('\nAttempting to create a test event...');
   const inOneWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
   const result = await createEvent({
-    name: `[TEST] shaberiba-bot connection check - safe to delete`,
+    name: `[TEST] kanji connection check - safe to delete`,
     startTimeIso: inOneWeek,
     description: 'Created by scripts/test-facebook-connection.js to verify API access. Delete me.',
   });

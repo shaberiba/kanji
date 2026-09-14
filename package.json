@@ -1,7 +1,7 @@
 {
-  "name": "shaberiba-bot",
+  "name": "kanji",
   "version": "1.0.0",
-  "description": "Discord bot for creating Facebook Page events, gated by owner/admin and later by Discord roles.",
+  "description": "Kanji (幹事) - Discord bot for creating Facebook Page events, gated by owner/admin and later by Discord roles.",
   "type": "module",
   "private": true,
   "engines": {

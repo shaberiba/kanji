@@ -1,6 +1,7 @@
-# shaberiba-bot
+# kanji
 
-Discord bot that creates Facebook Page events. Phase 1: owner/admin only.
+Discord bot (幹事 - "the person who organizes the group's events") that
+creates Facebook Page events. Phase 1: owner/admin only.
 Phase 2: any user holding a Discord role added via `/event-role`.
 
 ## Feasibility note
@@ -53,7 +54,8 @@ npm start                   # or `npm run dev` to auto-restart on changes
 Designed to run as a container. See `Dockerfile`. On the "Nexus" homelab
 Proxmox host, this follows the same LXC + Podman + systemd pattern as the
 existing `back-bot` container — see `deploy-shaberiba-bot.sh` in the
-homelab repo's `nexus/containers/` directory.
+homelab repo's `nexus/containers/` directory (deploys from
+`github.com/shaberiba/kanji`).
 
 The SQLite file at `./data/bot.sqlite3` must persist across
 restarts/redeploys — it holds the Facebook token and the role allowlist.
