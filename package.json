@@ -12,7 +12,8 @@
     "dev": "node --watch src/index.js",
     "register-commands": "node scripts/register-commands.js",
     "setup-facebook-token": "node scripts/setup-facebook-token.js",
-    "test-facebook-connection": "node scripts/test-facebook-connection.js"
+    "test-facebook-connection": "node scripts/test-facebook-connection.js",
+    "backfill-event-links": "node scripts/backfill-event-links.js"
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",

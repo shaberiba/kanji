@@ -32,6 +32,17 @@ function resolveGuild(discordClient) {
  * the Facebook event's start time has already passed (Discord rejects
  * scheduled events with a start time in the past).
  */
+/**
+ * Discord auto-links bare URLs inside a Scheduled Event's description, so
+ * this is how we surface a "view on Facebook" link on the Discord side.
+ */
+export function buildEventDescription(fbEvent) {
+  const link = `https://www.facebook.com/events/${fbEvent.id}`;
+  const base = fbEvent.description ? fbEvent.description.trim() : '';
+  const combined = base ? `${base}\n\nFacebook event: ${link}` : `Facebook event: ${link}`;
+  return combined.slice(0, 1000);
+}
+
 async function createDiscordScheduledEvent(guild, fbEvent, startTime) {
   if (startTime <= DateTime.now()) return null;
 
@@ -45,7 +56,7 @@ async function createDiscordScheduledEvent(guild, fbEvent, startTime) {
     scheduledEndTime: (endTime.isValid ? endTime : startTime.plus({ hours: DEFAULT_EVENT_DURATION_HOURS })).toJSDate(),
     privacyLevel: GuildScheduledEventPrivacyLevel.GuildOnly,
     entityType: GuildScheduledEventEntityType.External,
-    description: fbEvent.description ? fbEvent.description.slice(0, 1000) : undefined,
+    description: buildEventDescription(fbEvent),
     entityMetadata: { location: (fbEvent.place?.name || 'See Facebook event for details').slice(0, 100) },
   });
 
