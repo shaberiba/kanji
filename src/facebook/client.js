@@ -145,10 +145,14 @@ export async function createEvent(eventInput) {
       if (versionRetryError.isRateLimited) {
         throw versionRetryError;
       }
-      if (versionRetryError.isValidationError) {
-        throw versionRetryError;
-      }
 
+      // Note: Meta overloads code 100 ("invalid parameter") for both genuine
+      // bad input and "this edge doesn't exist/isn't available to your app"
+      // (e.g. error_subcode 33). Since start_time/end_time are already
+      // validated client-side before this is ever called, treat any
+      // non-auth/non-rate-limit error here as "the events edge is dead for
+      // this app" and fall through to the Page-post fallback rather than
+      // surfacing what looks like a validation error to the user.
       logger.warn({ err: versionRetryError }, 'Events edge unavailable for this app, falling back to a Page post');
 
       try {
