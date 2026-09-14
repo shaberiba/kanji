@@ -1,0 +1,27 @@
+{
+  "name": "shaberiba-bot",
+  "version": "1.0.0",
+  "description": "Discord bot for creating Facebook Page events, gated by owner/admin and later by Discord roles.",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "register-commands": "node scripts/register-commands.js",
+    "setup-facebook-token": "node scripts/setup-facebook-token.js",
+    "test-facebook-connection": "node scripts/test-facebook-connection.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.8.1",
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.7",
+    "luxon": "^3.5.0",
+    "pino": "^9.6.0"
+  },
+  "devDependencies": {
+    "pino-pretty": "^13.0.0"
+  }
+}

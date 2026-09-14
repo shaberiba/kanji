@@ -1,0 +1,173 @@
+import { config } from '../config.js';
+import { logger } from '../logger.js';
+import { getFacebookToken, markTokenStatus } from '../db/tokenStore.js';
+import { parseGraphError } from './errors.js';
+
+const GRAPH_BASE = 'https://graph.facebook.com';
+const FALLBACK_GRAPH_VERSION = 'v18.0';
+
+async function graphRequest(version, path, { method = 'GET', params = {} } = {}) {
+  const url = new URL(`${GRAPH_BASE}/${version}${path}`);
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null) {
+      url.searchParams.set(key, value);
+    }
+  }
+
+  const response = await fetch(url, { method });
+  const body = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw parseGraphError(response.status, body);
+  }
+  return body;
+}
+
+/**
+ * Step 2 of the manual token setup flow: exchange a short-lived user token
+ * (obtained via Graph API Explorer) for a long-lived one (~60 days).
+ */
+export async function exchangeLongLivedUserToken(shortLivedToken) {
+  const body = await graphRequest(config.facebook.graphApiVersion, '/oauth/access_token', {
+    params: {
+      grant_type: 'fb_exchange_token',
+      client_id: config.facebook.appId,
+      client_secret: config.facebook.appSecret,
+      fb_exchange_token: shortLivedToken,
+    },
+  });
+  return body.access_token;
+}
+
+/**
+ * Step 3: derive a (effectively non-expiring) Page Access Token from a
+ * long-lived user token.
+ */
+export async function fetchPageToken(longLivedUserToken, pageId) {
+  const body = await graphRequest(config.facebook.graphApiVersion, `/${pageId}`, {
+    params: {
+      fields: 'id,name,access_token',
+      access_token: longLivedUserToken,
+    },
+  });
+  return { id: body.id, name: body.name, accessToken: body.access_token };
+}
+
+/**
+ * Read-only health check: confirms the stored page token is still valid.
+ */
+export async function verifyPageToken() {
+  const record = getFacebookToken(config.facebook.pageId);
+  if (!record) {
+    return { ok: false, reason: 'No Facebook token stored yet. Run the setup script.' };
+  }
+
+  try {
+    const body = await graphRequest(config.facebook.graphApiVersion, `/${config.facebook.pageId}`, {
+      params: { fields: 'id,name', access_token: record.page_access_token },
+    });
+    markTokenStatus(config.facebook.pageId, 'valid');
+    return { ok: true, pageId: body.id, pageName: body.name, record };
+  } catch (error) {
+    if (error.isAuthError) {
+      markTokenStatus(config.facebook.pageId, 'invalid');
+    }
+    return { ok: false, reason: error.message, error, record };
+  }
+}
+
+function buildManualCreateInstructions({ name, startTimeIso, endTimeIso, description, location }) {
+  const lines = [
+    `Name: ${name}`,
+    `Start: ${startTimeIso}`,
+    endTimeIso ? `End: ${endTimeIso}` : null,
+    description ? `Description: ${description}` : null,
+    location ? `Location: ${location}` : null,
+  ].filter(Boolean);
+
+  return {
+    pageEventsUrl: `https://www.facebook.com/${config.facebook.pageId}/events`,
+    details: lines.join('\n'),
+  };
+}
+
+async function createEventAtVersion(version, pageAccessToken, { name, startTimeIso, endTimeIso, description, location }) {
+  return graphRequest(version, `/${config.facebook.pageId}/events`, {
+    method: 'POST',
+    params: {
+      name,
+      start_time: startTimeIso,
+      end_time: endTimeIso,
+      description,
+      location,
+      access_token: pageAccessToken,
+    },
+  });
+}
+
+/**
+ * Creates a Facebook Page event. Isolated single point of change: if the
+ * `/events` edge stops working for this app, only this function's fallback
+ * chain needs to change, not the Discord command layer.
+ *
+ * Returns one of:
+ *  - { status: 'created', eventId, eventUrl }
+ *  - { status: 'manual_fallback', pageEventsUrl, details }
+ *  - { status: 'posted_fallback', postId }
+ * Throws FacebookApiError for auth errors (caller should tell the user to re-auth).
+ */
+export async function createEvent(eventInput) {
+  const record = getFacebookToken(config.facebook.pageId);
+  if (!record) {
+    throw new Error('No Facebook token stored. An admin needs to run the token setup script.');
+  }
+  const pageAccessToken = record.page_access_token;
+
+  try {
+    const result = await createEventAtVersion(config.facebook.graphApiVersion, pageAccessToken, eventInput);
+    return { status: 'created', eventId: result.id, eventUrl: `https://www.facebook.com/events/${result.id}` };
+  } catch (primaryError) {
+    if (primaryError.isAuthError) {
+      markTokenStatus(config.facebook.pageId, 'invalid');
+      throw primaryError;
+    }
+
+    logger.warn({ err: primaryError }, 'Primary Graph API version rejected event creation, retrying on fallback version');
+
+    try {
+      const result = await createEventAtVersion(FALLBACK_GRAPH_VERSION, pageAccessToken, eventInput);
+      return { status: 'created', eventId: result.id, eventUrl: `https://www.facebook.com/events/${result.id}` };
+    } catch (versionRetryError) {
+      if (versionRetryError.isAuthError) {
+        markTokenStatus(config.facebook.pageId, 'invalid');
+        throw versionRetryError;
+      }
+      if (versionRetryError.isRateLimited) {
+        throw versionRetryError;
+      }
+      if (versionRetryError.isValidationError) {
+        throw versionRetryError;
+      }
+
+      logger.warn({ err: versionRetryError }, 'Events edge unavailable for this app, falling back to a Page post');
+
+      try {
+        const message = [
+          `New event: ${eventInput.name}`,
+          `When: ${eventInput.startTimeIso}${eventInput.endTimeIso ? ` - ${eventInput.endTimeIso}` : ''}`,
+          eventInput.location ? `Where: ${eventInput.location}` : null,
+          eventInput.description || null,
+        ].filter(Boolean).join('\n');
+
+        const post = await graphRequest(config.facebook.graphApiVersion, `/${config.facebook.pageId}/feed`, {
+          method: 'POST',
+          params: { message, access_token: pageAccessToken },
+        });
+        return { status: 'posted_fallback', postId: post.id };
+      } catch (postError) {
+        logger.warn({ err: postError }, 'Page post fallback also failed, falling back to manual instructions');
+        return { status: 'manual_fallback', ...buildManualCreateInstructions(eventInput) };
+      }
+    }
+  }
+}
