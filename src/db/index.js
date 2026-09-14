@@ -28,4 +28,16 @@ db.exec(`
     created_at TEXT NOT NULL,
     UNIQUE(guild_id, role_id)
   );
+
+  CREATE TABLE IF NOT EXISTS bot_config (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS posted_events (
+    facebook_event_id TEXT PRIMARY KEY,
+    discord_message_id TEXT,
+    posted_at TEXT NOT NULL
+  );
 `);

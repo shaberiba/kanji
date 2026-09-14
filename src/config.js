@@ -24,4 +24,5 @@ export const config = {
   defaultTimezone: process.env.DEFAULT_TIMEZONE || 'America/Chicago',
   databasePath: process.env.DATABASE_PATH || './data/bot.sqlite3',
   logLevel: process.env.LOG_LEVEL || 'info',
+  eventsPollIntervalMinutes: Number(process.env.EVENTS_POLL_INTERVAL_MINUTES) || 15,
 };

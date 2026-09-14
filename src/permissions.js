@@ -8,10 +8,11 @@ export function isOwnerOrAdmin(interaction) {
 }
 
 /**
- * Phase 1: owner/admin only.
- * Phase 2: also allow anyone holding a role from the guild's allowlist.
+ * Gates anything that publishes to the Facebook Page (creating an event,
+ * creating a plain post). Phase 1: owner/admin only. Phase 2: also allow
+ * anyone holding a role from the guild's allowlist (managed via /event-role).
  */
-export function canCreateEvent(interaction) {
+export function canPublishToFacebook(interaction) {
   if (isOwnerOrAdmin(interaction)) return true;
 
   const allowedRoleIds = new Set(

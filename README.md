@@ -1,19 +1,30 @@
 # kanji
 
 Discord bot (幹事 - "the person who organizes the group's events") that
-creates Facebook Page events. Phase 1: owner/admin only.
-Phase 2: any user holding a Discord role added via `/event-role`.
+connects a Discord server to a Facebook Page: it announces the Page's events
+in a Discord channel, and lets authorized users publish posts to the Page.
+Phase 1: owner/admin only. Phase 2: any user holding a Discord role added
+via `/event-role`.
 
 ## Feasibility note
 
-Meta has a history of restricting third-party event-creation access (Groups
-API access was cut off entirely in 2024; Page event creation has been
-restricted since 2018). This only works if your Facebook App has been
-specifically approved for the relevant permission. **Before relying on this
-bot, run `npm run test-facebook-connection -- --test-event-creation` to
-confirm event creation actually works for your app** — if it doesn't, the
-bot automatically falls back to posting the event details to the Page's
-feed, or to giving you a manual-creation link.
+Meta has a history of restricting third-party access to Page/Group events
+(Groups API access was cut off entirely in 2024; Page event *creation* has
+been restricted since 2018). **Confirmed for this app**: creating events via
+`POST /{page-id}/events` fails with a "does not support this operation"
+error (code 100 / subcode 33) - Meta doesn't expose that edge to this app.
+Reading events and creating plain Page posts (`pages_manage_posts`) are not
+affected by that restriction and are expected to keep working.
+
+Because of this, the bot's real capabilities are:
+- **Reading** events already on the Page (created manually via Facebook's
+  web UI) and announcing new ones in a Discord channel (`/sync-events`, or
+  automatically on a timer).
+- **Creating plain Page posts** from Discord (`/create-post`).
+- `/create-event` still exists and will attempt real event creation first,
+  but expect it to always fall back to posting the details to the Page's
+  feed instead - it's kept for whenever Meta's restrictions change, not as
+  a load-bearing feature right now.
 
 ## Setup
 
@@ -37,6 +48,8 @@ cp .env.example .env
    SQLite (`./data/bot.sqlite3`). Run this on the host directly — never
    paste a token into a Discord command.
 4. Verify: `npm run test-facebook-connection -- --test-event-creation`
+   (checks token validity, read access to events, and optionally attempts
+   a real test event so you can see which fallback path it takes).
 
 ### Discord commands
 
@@ -45,9 +58,12 @@ npm run register-commands   # registers slash commands (set DISCORD_GUILD_ID for
 npm start                   # or `npm run dev` to auto-restart on changes
 ```
 
-- `/create-event name start_time end_time? description? location?`
+- `/create-post message link?` — publish a plain post to the Facebook Page
+- `/create-event name start_time end_time? description? location?` — tries real event creation, falls back to a Page post or manual instructions
+- `/events-channel set #channel` / `show` — configure where new Facebook events get announced (admin only)
+- `/sync-events` — manually check the Page for new events right now (admin only); also runs automatically every `EVENTS_POLL_INTERVAL_MINUTES` (default 15)
 - `/facebook-status` — admin-only diagnostics
-- `/event-role add|remove|list @role` — Phase 2 role allowlist management
+- `/event-role add|remove|list @role` — Phase 2 role allowlist management (gates both `/create-post` and `/create-event`)
 
 ## Deployment
 
@@ -58,4 +74,6 @@ homelab repo's `nexus/containers/` directory (deploys from
 `github.com/shaberiba/kanji`).
 
 The SQLite file at `./data/bot.sqlite3` must persist across
-restarts/redeploys — it holds the Facebook token and the role allowlist.
+restarts/redeploys — it holds the Facebook token, the role allowlist, the
+events-channel config, and which Facebook events have already been
+announced to Discord.

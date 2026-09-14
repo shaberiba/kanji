@@ -76,6 +76,54 @@ export async function verifyPageToken() {
   }
 }
 
+/**
+ * Publishes a plain Page post (message + optional link). Uses pages_manage_posts,
+ * which - unlike the events edge - is still current and confirmed working.
+ */
+export async function createPost({ message, link }) {
+  const record = getFacebookToken(config.facebook.pageId);
+  if (!record) {
+    throw new Error('No Facebook token stored. An admin needs to run the token setup script.');
+  }
+
+  const params = { message, access_token: record.page_access_token };
+  if (link) params.link = link;
+
+  try {
+    const post = await graphRequest(config.facebook.graphApiVersion, `/${config.facebook.pageId}/feed`, {
+      method: 'POST',
+      params,
+    });
+    return { postId: post.id, postUrl: `https://www.facebook.com/${post.id}` };
+  } catch (error) {
+    if (error.isAuthError) {
+      markTokenStatus(config.facebook.pageId, 'invalid');
+    }
+    throw error;
+  }
+}
+
+/**
+ * Reads events already on the Page (created manually via the Facebook web UI,
+ * since this app can't create them via API - see createEvent()). Read access
+ * has historically been less restricted than write access, but has not been
+ * confirmed to work for this app; callers should handle failures gracefully.
+ */
+export async function listPageEvents() {
+  const record = getFacebookToken(config.facebook.pageId);
+  if (!record) {
+    throw new Error('No Facebook token stored. An admin needs to run the token setup script.');
+  }
+
+  const body = await graphRequest(config.facebook.graphApiVersion, `/${config.facebook.pageId}/events`, {
+    params: {
+      fields: 'id,name,description,start_time,end_time,place',
+      access_token: record.page_access_token,
+    },
+  });
+  return body.data ?? [];
+}
+
 function buildManualCreateInstructions({ name, startTimeIso, endTimeIso, description, location }) {
   const lines = [
     `Name: ${name}`,
@@ -163,11 +211,8 @@ export async function createEvent(eventInput) {
           eventInput.description || null,
         ].filter(Boolean).join('\n');
 
-        const post = await graphRequest(config.facebook.graphApiVersion, `/${config.facebook.pageId}/feed`, {
-          method: 'POST',
-          params: { message, access_token: pageAccessToken },
-        });
-        return { status: 'posted_fallback', postId: post.id };
+        const post = await createPost({ message });
+        return { status: 'posted_fallback', postId: post.postId };
       } catch (postError) {
         logger.warn({ err: postError }, 'Page post fallback also failed, falling back to manual instructions');
         return { status: 'manual_fallback', ...buildManualCreateInstructions(eventInput) };

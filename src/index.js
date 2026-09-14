@@ -2,12 +2,25 @@ import { Client, GatewayIntentBits, MessageFlags } from 'discord.js';
 import { config } from './config.js';
 import { logger } from './logger.js';
 import { commands } from './commands/index.js';
+import { syncEvents } from './facebook/eventSync.js';
 import './db/index.js';
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 client.once('ready', () => {
   logger.info({ tag: client.user.tag }, 'Bot ready');
+
+  const intervalMs = config.eventsPollIntervalMinutes * 60 * 1000;
+  setInterval(() => {
+    syncEvents(client)
+      .then((result) => {
+        if (result.posted > 0) {
+          logger.info(result, 'Synced new Facebook events to Discord');
+        }
+      })
+      .catch((error) => logger.error({ err: error }, 'Scheduled event sync failed'));
+  }, intervalMs);
+  logger.info({ intervalMinutes: config.eventsPollIntervalMinutes }, 'Facebook events poller started');
 });
 
 client.on('interactionCreate', async (interaction) => {

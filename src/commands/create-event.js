@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
-import { canCreateEvent } from '../permissions.js';
+import { canPublishToFacebook } from '../permissions.js';
 import { parseLocalDateTime } from '../dateParsing.js';
 import { createEvent } from '../facebook/client.js';
 import { logger } from '../logger.js';
@@ -31,7 +31,7 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(interaction) {
-  if (!canCreateEvent(interaction)) {
+  if (!canPublishToFacebook(interaction)) {
     await interaction.reply({
       content: "You don't have permission to create events. Ask an admin to grant your role access with /event-role.",
       flags: MessageFlags.Ephemeral,

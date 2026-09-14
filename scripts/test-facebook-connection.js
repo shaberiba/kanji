@@ -1,9 +1,11 @@
 #!/usr/bin/env node
-// Read-only health check: confirms the stored Page token is valid, and
-// separately smoke-tests whether this app can actually create Page events
-// (the capability Meta has restricted for most third-party apps).
+// Read-only health check: confirms the stored Page token is valid, checks
+// whether this app can read the Page's existing events (needed for the
+// Discord event-sync feature), and optionally smoke-tests whether it can
+// also create Page events (a capability Meta has restricted for most
+// third-party apps - confirmed dead for this app as of the last check).
 
-import { verifyPageToken, createEvent } from '../src/facebook/client.js';
+import { verifyPageToken, createEvent, listPageEvents } from '../src/facebook/client.js';
 import { config } from '../src/config.js';
 
 async function main() {
@@ -13,6 +15,15 @@ async function main() {
     process.exit(1);
   }
   console.log(`Token OK. Connected to Page "${status.pageName}" (${status.pageId}).`);
+
+  console.log('\nChecking read access to Page events (needed for /sync-events)...');
+  try {
+    const events = await listPageEvents();
+    console.log(`Read access OK - found ${events.length} event(s) currently on the Page.`);
+  } catch (error) {
+    console.log(`Read access FAILED: ${error.message}`);
+    console.log('The Discord event-sync feature will not work until this is resolved.');
+  }
 
   const doEventTest = process.argv.includes('--test-event-creation');
   if (!doEventTest) {

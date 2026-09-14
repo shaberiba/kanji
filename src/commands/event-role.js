@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
-import { isOwnerOrAdmin, canCreateEvent } from '../permissions.js';
+import { isOwnerOrAdmin, canPublishToFacebook } from '../permissions.js';
 import { addAllowedRole, removeAllowedRole, listAllowedRoles } from '../db/roleStore.js';
 
 export const data = new SlashCommandBuilder()
@@ -23,7 +23,7 @@ export async function execute(interaction) {
   const subcommand = interaction.options.getSubcommand();
 
   if (subcommand === 'list') {
-    if (!canCreateEvent(interaction)) {
+    if (!canPublishToFacebook(interaction)) {
       await interaction.reply({
         content: "You don't have permission to view this.",
         flags: MessageFlags.Ephemeral,
