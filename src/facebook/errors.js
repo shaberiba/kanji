@@ -21,6 +21,16 @@ export class FacebookApiError extends Error {
     return this.code === 4 || this.code === 17 || this.code === 32;
   }
 
+  /**
+   * Code 12: the events management edge (create/update/delete) is
+   * deprecated platform-wide as of Graph API v2.0 - confirmed for both
+   * creation and deletion. Not fixable by permissions or API version;
+   * there is no fallback other than doing it manually on Facebook.
+   */
+  get isDeprecatedEdge() {
+    return this.code === 12;
+  }
+
   get isValidationError() {
     return this.code === 100;
   }

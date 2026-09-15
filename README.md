@@ -28,8 +28,19 @@ Meta has a history of restricting third-party access to Page/Group events
 been restricted since 2018). **Confirmed for this app**: creating events via
 `POST /{page-id}/events` fails with a "does not support this operation"
 error (code 100 / subcode 33) - Meta doesn't expose that edge to this app.
-Reading events and creating plain Page posts (`pages_manage_posts`) are not
-affected by that restriction and are expected to keep working.
+**Also confirmed**: deleting events via `DELETE /{event-id}` fails with
+"events management API is deprecated for versions v2.0 and higher" (code
+12) - this is a platform-wide deprecation of the whole events management
+edge (create/update/delete), not a per-app or per-Page permission issue,
+so no permission grant fixes it. Retested after granting the app
+additional Page permissions - both failures are identical, confirming
+this is not a permissions problem and won't be fixed by re-authing or
+re-granting access. Reading events and creating/deleting plain Page
+posts (`pages_manage_posts`) are not affected by either restriction and
+are expected to keep working - deleting a fallback post created by
+`/create-event`'s `posted_fallback` path can be done with the same
+`deleteEvent()`/`/delete-event` code, since post deletion isn't part of
+the deprecated events edge.
 
 Because of this, the bot's real capabilities are:
 - **Reading** events already on the Page (created manually via Facebook's
@@ -82,7 +93,7 @@ npm start                   # or `npm run dev` to auto-restart on changes
 
 - `/create-post message link?` — publish a plain post to the Facebook Page
 - `/create-event name start_time end_time? description? location?` — tries real event creation, falls back to a Page post or manual instructions
-- `/delete-event event` — deletes a Facebook Page event (accepts the numeric event ID or its Facebook URL)
+- `/delete-event event` — deletes a Facebook Page post or event by ID (accepts a plain numeric ID, a composite post ID like `<page-id>_<post-id>`, or a Facebook event URL); works for posts, but expect it to always fail for actual events (see Feasibility note) - events must be deleted manually on Facebook
 - `/events-channel set #channel` / `show` — configure where 48h/24h event reminders get posted (admin only)
 - `/sync-events` — manually mirror new Facebook events into Discord and send any due reminders right now (admin only); also runs automatically every `EVENTS_POLL_INTERVAL_MINUTES` (default 15)
 - `/facebook-status` — admin-only diagnostics

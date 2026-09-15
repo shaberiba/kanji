@@ -5,14 +5,27 @@ import { logger } from '../logger.js';
 
 export const data = new SlashCommandBuilder()
   .setName('delete-event')
-  .setDescription('Delete a Facebook Page event')
+  .setDescription('Delete a Facebook Page event or post')
   .addStringOption((opt) =>
-    opt.setName('event').setDescription('Event ID or Facebook event URL').setRequired(true)
+    opt
+      .setName('event')
+      .setDescription('Event ID, Facebook event URL, or a post ID (e.g. "<page-id>_<post-id>")')
+      .setRequired(true)
   );
 
+/**
+ * A bare ID - either a plain numeric event ID or a composite post ID like
+ * "<page-id>_<post-id>" - is used as-is. Otherwise the input is treated as
+ * a Facebook URL and the first numeric path segment is pulled out (for a
+ * recurring event's /events/<parent-id>/<instance-id>/ URL, that's the
+ * parent/series ID).
+ */
 function extractEventId(input) {
-  const match = input.match(/(\d{5,})/);
-  return match ? match[1] : null;
+  const trimmed = input.trim();
+  if (/^\d+(_\d+)?$/.test(trimmed)) return trimmed;
+
+  const match = trimmed.match(/\d{5,}/);
+  return match ? match[0] : null;
 }
 
 export async function execute(interaction) {
@@ -45,6 +58,11 @@ export async function execute(interaction) {
     if (error.isAuthError) {
       await interaction.editReply(
         'Facebook authorization has expired. An admin needs to re-run the token setup script on the server.'
+      );
+    } else if (error.isDeprecatedEdge) {
+      await interaction.editReply(
+        "Facebook's events management API is deprecated platform-wide, so no app can delete events this way " +
+          `(this isn't a permissions issue). Delete it manually: https://www.facebook.com/events/${eventId}/`
       );
     } else if (error.isPermissionError) {
       await interaction.editReply("Facebook says this app doesn't have permission to delete this event.");
