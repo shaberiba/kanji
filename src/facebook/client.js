@@ -124,6 +124,30 @@ export async function listPageEvents() {
   return body.data ?? [];
 }
 
+/**
+ * Deletes a Facebook Page event. Requires the Page token to have been
+ * granted event-management permission - previously blocked by the app's
+ * permission grant on the Page, same restriction class as createEvent().
+ */
+export async function deleteEvent(eventId) {
+  const record = getFacebookToken(config.facebook.pageId);
+  if (!record) {
+    throw new Error('No Facebook token stored. An admin needs to run the token setup script.');
+  }
+
+  try {
+    await graphRequest(config.facebook.graphApiVersion, `/${eventId}`, {
+      method: 'DELETE',
+      params: { access_token: record.page_access_token },
+    });
+  } catch (error) {
+    if (error.isAuthError) {
+      markTokenStatus(config.facebook.pageId, 'invalid');
+    }
+    throw error;
+  }
+}
+
 function buildManualCreateInstructions({ name, startTimeIso, endTimeIso, description, location }) {
   const lines = [
     `Name: ${name}`,

@@ -82,6 +82,7 @@ npm start                   # or `npm run dev` to auto-restart on changes
 
 - `/create-post message link?` — publish a plain post to the Facebook Page
 - `/create-event name start_time end_time? description? location?` — tries real event creation, falls back to a Page post or manual instructions
+- `/delete-event event` — deletes a Facebook Page event (accepts the numeric event ID or its Facebook URL)
 - `/events-channel set #channel` / `show` — configure where 48h/24h event reminders get posted (admin only)
 - `/sync-events` — manually mirror new Facebook events into Discord and send any due reminders right now (admin only); also runs automatically every `EVENTS_POLL_INTERVAL_MINUTES` (default 15)
 - `/facebook-status` — admin-only diagnostics

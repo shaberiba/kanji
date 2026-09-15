@@ -13,7 +13,8 @@
     "register-commands": "node scripts/register-commands.js",
     "setup-facebook-token": "node scripts/setup-facebook-token.js",
     "test-facebook-connection": "node scripts/test-facebook-connection.js",
-    "backfill-event-links": "node scripts/backfill-event-links.js"
+    "backfill-event-links": "node scripts/backfill-event-links.js",
+    "delete-event": "node scripts/delete-event.js"
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",
