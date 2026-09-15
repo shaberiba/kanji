@@ -99,10 +99,16 @@ npm start                   # or `npm run dev` to auto-restart on changes
 - `/facebook-status` — admin-only diagnostics
 - `/event-role add|remove|list @role` — Phase 2 role allowlist management (gates both `/create-post` and `/create-event`)
 
-The bot needs the **Manage Events** permission in your server to create
-Discord's native Scheduled Events - include it when generating the OAuth2
-invite URL (Developer Portal → your app → OAuth2 → URL Generator → `bot`
-scope → check "Manage Events" along with whatever else you grant it).
+When generating the OAuth2 invite URL (Developer Portal → your app →
+OAuth2 → URL Generator), select both the `bot` and `applications.commands`
+scopes (the latter is required for slash commands to register/appear),
+and grant the bot these permissions:
+- **Manage Events** — to create Discord's native Scheduled Events
+- **View Channel** and **Send Messages** — to post 48h/24h reminders to
+  the configured channel
+- **Embed Links** — reminders are sent as embeds
+
+No privileged Gateway intents are needed (only `Guilds`).
 
 ## Deployment
 
