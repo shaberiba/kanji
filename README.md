@@ -59,7 +59,11 @@ Because of this, the bot's real capabilities are:
   doesn't flood the server's Events tab with a year's worth of dates.
 - **Reminders**: 48 hours and 24 hours before each synced event's start
   time, the bot posts a reminder to a configured channel (once per window,
-  per event - tracked in SQLite so it never double-sends).
+  per event - tracked in SQLite so it never double-sends). The reminder
+  embed links to both the Discord Scheduled Event (so people can RSVP
+  right there) and the Facebook event, plus the location and cover photo
+  when available; the 24h reminder is colored differently from the 48h
+  one.
 - **Creating plain Page posts** from Discord (`/create-post`).
 - `/create-event` still exists and will attempt real event creation first,
   but expect it to always fall back to posting the details to the Page's

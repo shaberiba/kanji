@@ -76,13 +76,39 @@ async function createDiscordScheduledEvent(guild, fbEvent, startTime) {
   return created.id;
 }
 
-function buildReminderEmbed(fbEvent, startTime, hoursBefore) {
-  return new EmbedBuilder()
-    .setTitle(`Reminder: ${fbEvent.name || 'Untitled event'}`)
-    .setURL(`https://www.facebook.com/events/${fbEvent.id}`)
-    .setColor(0x3d2f7a)
+function buildDiscordEventUrl(guildId, discordScheduledEventId) {
+  return `https://discord.com/events/${guildId}/${discordScheduledEventId}`;
+}
+
+/**
+ * The title links to the Discord Scheduled Event itself (so clicking it
+ * opens the RSVP/"Interested" page right there in Discord) when we have
+ * one; the Facebook link is always surfaced separately as a field, since
+ * that's where the full event details/comments/etc. live.
+ */
+function buildReminderEmbed(fbEvent, startTime, hoursBefore, { guildId, discordScheduledEventId } = {}) {
+  const facebookUrl = `https://www.facebook.com/events/${fbEvent.id}`;
+  const discordUrl = discordScheduledEventId ? buildDiscordEventUrl(guildId, discordScheduledEventId) : null;
+
+  const embed = new EmbedBuilder()
+    .setTitle(fbEvent.name || 'Untitled event')
+    .setURL(discordUrl || facebookUrl)
+    .setColor(hoursBefore <= 24 ? 0xe0433d : 0x3d2f7a)
     .setDescription(`Starts <t:${Math.floor(startTime.toSeconds())}:R> (<t:${Math.floor(startTime.toSeconds())}:F>)`)
     .setFooter({ text: `${hoursBefore}-hour reminder` });
+
+  if (fbEvent.place?.name) {
+    embed.addFields({ name: 'Location', value: fbEvent.place.name });
+  }
+
+  const links = discordUrl ? [`[Discord event](${discordUrl})`, `[Facebook event](${facebookUrl})`] : [`[Facebook event](${facebookUrl})`];
+  embed.addFields({ name: 'Links', value: links.join(' · ') });
+
+  if (fbEvent.cover?.source) {
+    embed.setThumbnail(fbEvent.cover.source);
+  }
+
+  return embed;
 }
 
 /**
@@ -105,7 +131,11 @@ async function syncEventForGuild(discordClient, guild, fbEvent, startTime, isPas
       }
     }
     recordGuildEventSync({ facebookEventId: fbEvent.id, guildId: guild.id, discordScheduledEventId });
-    row = { reminder_48h_sent_at: null, reminder_24h_sent_at: null };
+    row = {
+      reminder_48h_sent_at: null,
+      reminder_24h_sent_at: null,
+      discord_scheduled_event_id: discordScheduledEventId,
+    };
     result.synced = true;
   }
 
@@ -121,7 +151,11 @@ async function syncEventForGuild(discordClient, guild, fbEvent, startTime, isPas
 
     try {
       const channel = await discordClient.channels.fetch(channelId);
-      await channel.send({ embeds: [buildReminderEmbed(fbEvent, startTime, window.hoursBefore)] });
+      const embed = buildReminderEmbed(fbEvent, startTime, window.hoursBefore, {
+        guildId: guild.id,
+        discordScheduledEventId: row.discord_scheduled_event_id,
+      });
+      await channel.send({ embeds: [embed] });
       markGuildEventReminderSent(fbEvent.id, guild.id, window.key);
       result.remindersSent += 1;
     } catch (error) {
