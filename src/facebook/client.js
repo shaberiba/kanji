@@ -103,12 +103,8 @@ export async function createPost({ message, link }) {
   }
 }
 
-/**
- * Reads events already on the Page (created manually via the Facebook web UI,
- * since this app can't create them via API - see createEvent()). Read access
- * has historically been less restricted than write access, but has not been
- * confirmed to work for this app; callers should handle failures gracefully.
- */
+const MAX_FUTURE_OCCURRENCES_PER_SERIES = 5;
+
 /**
  * A recurring Facebook event comes back as one parent object plus an
  * `event_times` array - one entry per occurrence, each with its own id/
@@ -116,12 +112,24 @@ export async function createPost({ message, link }) {
  * (inheriting the parent's name/description/place/cover) so every future
  * occurrence gets synced individually instead of only ever the parent's
  * own start_time. Same approach as denver-shaberiba's calendar feed.
+ *
+ * Capped to the next MAX_FUTURE_OCCURRENCES_PER_SERIES occurrences (a
+ * biweekly series can have a year+ of dates queued up on Facebook) so a
+ * single series doesn't flood the server's Events tab with dozens of
+ * entries - past occurrences are dropped entirely rather than synced and
+ * skipped, since there's no reason to keep tracking them.
  */
 function expandRecurringEvents(events) {
+  const now = new Date();
   const expanded = [];
   for (const event of events) {
     if (event.event_times?.length) {
-      for (const occurrence of event.event_times) {
+      const upcoming = event.event_times
+        .filter((occurrence) => new Date(occurrence.start_time) > now)
+        .sort((a, b) => new Date(a.start_time) - new Date(b.start_time))
+        .slice(0, MAX_FUTURE_OCCURRENCES_PER_SERIES);
+
+      for (const occurrence of upcoming) {
         expanded.push({
           ...event,
           id: occurrence.id,
@@ -137,6 +145,12 @@ function expandRecurringEvents(events) {
   return expanded;
 }
 
+/**
+ * Reads events already on the Page (created manually via the Facebook web UI,
+ * since this app can't create them via API - see createEvent()). Read access
+ * has historically been less restricted than write access, but has not been
+ * confirmed to work for this app; callers should handle failures gracefully.
+ */
 export async function listPageEvents() {
   const record = getFacebookToken(config.facebook.pageId);
   if (!record) {

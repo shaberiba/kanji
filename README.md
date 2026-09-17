@@ -52,9 +52,11 @@ Because of this, the bot's real capabilities are:
   Discord event's image. A recurring Facebook event (e.g. a biweekly
   meetup) comes back from the Graph API as one parent object plus an
   `event_times` array of every future occurrence's own id/start/end time -
-  `listPageEvents()` expands each occurrence into its own event so every
-  future date in the series gets mirrored individually, not just the next
-  one (same approach as `denver-shaberiba`'s calendar feed).
+  `listPageEvents()` expands each occurrence into its own event so
+  multiple dates in the series get mirrored individually, not just the
+  next one (same approach as `denver-shaberiba`'s calendar feed), capped
+  at the next 5 upcoming occurrences per series so a long-running series
+  doesn't flood the server's Events tab with a year's worth of dates.
 - **Reminders**: 48 hours and 24 hours before each synced event's start
   time, the bot posts a reminder to a configured channel (once per window,
   per event - tracked in SQLite so it never double-sends).
