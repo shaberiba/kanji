@@ -49,7 +49,12 @@ Because of this, the bot's real capabilities are:
   existing/backlog events don't spam a channel when first synced. Each
   mirrored event's description includes a link back to the Facebook event,
   and its cover photo (if the Facebook event has one) is set as the
-  Discord event's image.
+  Discord event's image. A recurring Facebook event (e.g. a biweekly
+  meetup) comes back from the Graph API as one parent object plus an
+  `event_times` array of every future occurrence's own id/start/end time -
+  `listPageEvents()` expands each occurrence into its own event so every
+  future date in the series gets mirrored individually, not just the next
+  one (same approach as `denver-shaberiba`'s calendar feed).
 - **Reminders**: 48 hours and 24 hours before each synced event's start
   time, the bot posts a reminder to a configured channel (once per window,
   per event - tracked in SQLite so it never double-sends).

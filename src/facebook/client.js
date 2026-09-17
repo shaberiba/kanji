@@ -109,6 +109,34 @@ export async function createPost({ message, link }) {
  * has historically been less restricted than write access, but has not been
  * confirmed to work for this app; callers should handle failures gracefully.
  */
+/**
+ * A recurring Facebook event comes back as one parent object plus an
+ * `event_times` array - one entry per occurrence, each with its own id/
+ * start_time/end_time. Expand each occurrence into a standalone event
+ * (inheriting the parent's name/description/place/cover) so every future
+ * occurrence gets synced individually instead of only ever the parent's
+ * own start_time. Same approach as denver-shaberiba's calendar feed.
+ */
+function expandRecurringEvents(events) {
+  const expanded = [];
+  for (const event of events) {
+    if (event.event_times?.length) {
+      for (const occurrence of event.event_times) {
+        expanded.push({
+          ...event,
+          id: occurrence.id,
+          start_time: occurrence.start_time,
+          end_time: occurrence.end_time,
+          event_times: undefined,
+        });
+      }
+    } else {
+      expanded.push(event);
+    }
+  }
+  return expanded;
+}
+
 export async function listPageEvents() {
   const record = getFacebookToken(config.facebook.pageId);
   if (!record) {
@@ -117,11 +145,11 @@ export async function listPageEvents() {
 
   const body = await graphRequest(config.facebook.graphApiVersion, `/${config.facebook.pageId}/events`, {
     params: {
-      fields: 'id,name,description,start_time,end_time,place,cover',
+      fields: 'id,name,description,start_time,end_time,place,cover,event_times',
       access_token: record.page_access_token,
     },
   });
-  return body.data ?? [];
+  return expandRecurringEvents(body.data ?? []);
 }
 
 /**
