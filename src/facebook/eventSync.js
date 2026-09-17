@@ -119,10 +119,20 @@ async function syncEventForGuild(discordClient, guild, fbEvent, startTime, isPas
     const alreadySent = window.key === '48h' ? row.reminder_48h_sent_at : row.reminder_24h_sent_at;
     if (alreadySent || hoursUntilStart > window.hoursBefore) continue;
 
-    const channel = await discordClient.channels.fetch(channelId);
-    await channel.send({ embeds: [buildReminderEmbed(fbEvent, startTime, window.hoursBefore)] });
-    markGuildEventReminderSent(fbEvent.id, guild.id, window.key);
-    result.remindersSent += 1;
+    try {
+      const channel = await discordClient.channels.fetch(channelId);
+      await channel.send({ embeds: [buildReminderEmbed(fbEvent, startTime, window.hoursBefore)] });
+      markGuildEventReminderSent(fbEvent.id, guild.id, window.key);
+      result.remindersSent += 1;
+    } catch (error) {
+      // One guild's misconfigured/inaccessible channel must never abort the
+      // sync pass for every other guild and event - log and keep going, and
+      // leave the reminder unmarked so it's retried next poll.
+      logger.warn(
+        { err: error, facebookEventId: fbEvent.id, guildId: guild.id, channelId },
+        'Failed to send event reminder'
+      );
+    }
   }
 
   return result;
